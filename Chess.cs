@@ -17,6 +17,8 @@ namespace BiKnight2
             public int index
             {
                 get { return x + y * 8; }
+                set { x = (byte)(value % 8);
+                      y = (byte)(value / 8); }
             }
 
             public string chess
@@ -39,6 +41,16 @@ namespace BiKnight2
                 return x >= 0 && x < 8 &&
                        y >= 0 && y < 8;
             }
+
+            public override bool Equals(object obj)
+            {
+                return base.Equals(obj);
+            }
+
+            public override int GetHashCode()
+            {
+                return base.GetHashCode();
+            }
         }
 
         public struct Combo
@@ -54,10 +66,10 @@ namespace BiKnight2
                 for (int y = 0; y < 8; y++)
                     for (int x = 0; x < 8; x++)
                         board[x, y] = ' ';
-                board[whiteKing.x, whiteKing.y] = 'K';
-                board[whiteBishop.x, whiteBishop.y] = 'B';
-                board[whiteKnight.x, whiteKnight.y] = 'N';
-                board[blackKing.x, blackKing.y] = 'k';
+                board[whiteKing.x, whiteKing.y] = '♔';
+                board[whiteBishop.x, whiteBishop.y] = '♗';
+                board[whiteKnight.x, whiteKnight.y] = '♘';
+                board[blackKing.x, blackKing.y] = '♚';
                 return board;
             }
 
@@ -93,20 +105,22 @@ namespace BiKnight2
                 char[,] board = getBoard();
                 ConsoleColor fore = Console.ForegroundColor;
                 ConsoleColor back = Console.BackgroundColor;
+                Console.OutputEncoding = System.Text.Encoding.UTF8;
                 for (int y = 0; y < 8; y++)
                 { 
                     for (int x = 0; x < 8; x++)
                     {
                         Console.BackgroundColor = (x + y) % 2 == 0 ?
                             ConsoleColor.Gray : ConsoleColor.DarkGray;
-                        Console.ForegroundColor = board[x, y] == 'k' ?
-                            ConsoleColor.Black : ConsoleColor.Yellow;
+                        Console.ForegroundColor = board[x, y] == '♚' ?
+                            ConsoleColor.Black : ConsoleColor.DarkBlue;
                         Console.Write(board[x, y]);
                     }
                     Console.WriteLine();
                 }
                 Console.ForegroundColor = fore;
                 Console.BackgroundColor = back;
+                Console.WriteLine();
             }
         }
 
@@ -482,5 +496,114 @@ namespace BiKnight2
 
         }
 
+        public void Save()
+        {
+            //box = new WhiteBox();
+            box.Save();
+        }
+
+        public void Load()
+        {
+            box = new WhiteBox();
+            box.Load();
+        }
+
+        public void PlayFEN(string fen)
+        {
+            Combo wCombo;
+            wCombo = getCombo(fen);
+
+            WhitesMove wMove = box.Get(wCombo);
+            byte moves = wMove.moves;
+            if (moves == 0) return;
+            Console.WriteLine("moves = " + ((moves + 1) / 2).ToString());
+            wCombo.print();
+            if (moves == 1) return;
+
+            //Main 
+            while(true)
+            {
+                //White move
+                Combo bCombo = wMove.combo;
+                //Find which figure
+                // change position
+                if (wMove.moveFrom == wCombo.whiteKing)
+                    bCombo.whiteKing = wMove.moveTo;
+                else
+                if (wMove.moveFrom == wCombo.whiteBishop)
+                    bCombo.whiteBishop = wMove.moveTo;
+                else
+                    if (wMove.moveFrom == wCombo.whiteKnight)
+                    bCombo.whiteKnight = wMove.moveTo;
+                else
+                    return;
+                //print position
+                bCombo.print();
+
+                //Out from cycle
+                if (moves <= 1) break;
+                bool find;
+                ConsoleKeyInfo cki;
+                char ch;
+                do
+                {
+                    do
+                    {
+                        cki = Console.ReadKey(true);
+                        ch = cki.KeyChar;
+                    }
+                    while (ch < '1' || ch > '9' || ch == '5');
+
+                    int dx = 0;
+                    int dy = 0;
+                    switch (ch)
+                    {
+                        case '1': dx = -1; dy = 1; break;
+                        case '2': dx = 0; dy = 1; break;
+                        case '3': dx = 1; dy = 1; break;
+                        case '4': dx = -1; dy = 0; break;
+
+                        case '6': dx = 1; dy = 0; break;
+                        case '7': dx = -1; dy = -1; break;
+                        case '8': dx = 0; dy = -1; break;
+                        case '9': dx = 1; dy = -1; break;
+                    }
+
+                    //Change bCombo
+                    wCombo = bCombo;
+                    wCombo.blackKing.x += (byte)dx;
+                    wCombo.blackKing.y += (byte)dy;
+
+                    //Do next move black and white
+                    find = false;
+                    foreach (Combo wCmb in AllBlackKingMovesForward(bCombo))
+                    {
+                        if (wCombo.blackKing == wCmb.blackKing)
+                        {
+                            find = true;
+                            break;
+                        }
+                    }
+                } while (!find);
+                wMove = box.Get(wCombo);
+                moves = wMove.moves;
+                Console.WriteLine("moves = " + ((moves + 1) / 2).ToString());
+                wCombo.print();
+            }
+        }
+
+        private IEnumerable<Combo> AllBlackKingMovesForward(Combo black)
+        {
+            Combo blackCombo = black;
+            Coord blackCoord = black.blackKing;
+            foreach(Coord blackCrd in AllKingMoves(blackCoord))
+            {
+                blackCombo.blackKing = blackCrd;
+                //If impossible position - skip
+                if (isCheck(blackCombo))
+                    continue;
+                yield return blackCombo;
+            }
+        }
     }
 }
